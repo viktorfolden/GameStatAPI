@@ -342,3 +342,245 @@ GAME_API_URL=http://localhost:8080
 Innlogging og API-kall krever fortsatt Supabase-oppsettet og gyldige tilgangstokens. Bruk helst et **eget Supabase-prosjekt til utvikling**, så lokale spillrunder ikke blandes med produksjonsdata.
 
 Du kan også starte `GameApiApplication` direkte fra IntelliJ. Helt lokal drift med lokal PostgreSQL og lokal Supabase Auth er mulig, men det krever ekstra oppsett; dagens enkleste oppsett trenger internett til Supabase.
+
+## 11. Supabase-konto opprettet med GitHub
+
+**Dato:** 2026-10-27 kl. 20:37:22
+
+### Bruker
+
+Vi har brukt github til å lage bruker i supabase, vil noen av disse variablene endre seg?
+
+### Assistent
+
+**Nei — hvis dere mener at dere brukte «Sign in with GitHub» for å opprette kontoen på Supabase-nettsiden, endrer det ikke variablene.** Det er administratorinnloggingen deres, ikke spillernes innlogging.
+
+Verdiene hentes fra Supabase-prosjektet dere oppretter:
+
+| Variabel | Hva dere skal bruke |
+|---|---|
+| `SUPABASE_URL` | Prosjektets URL fra prosjektets Connect/API-innstillinger. |
+| `SUPABASE_PUBLISHABLE_KEY` | Prosjektets publiserbare API-nøkkel, kun til Python-klienten. |
+| `DATABASE_URL` | PostgreSQL-adressen fra **Connect**, skrevet som en JDBC-URL (`jdbc:postgresql://…`). |
+| `DATABASE_USERNAME` | Databasebrukeren fra tilkoblingsinnstillingene — ikke GitHub-brukernavnet. |
+| `DATABASE_PASSWORD` | Databasepassordet dere valgte da prosjektet ble opprettet, eller passordet til en egen databasebruker — ikke GitHub-passordet. |
+| `GAME_API_URL` | Adressen til Java-serveren: lokalt `http://localhost:8080`, eller HTTPS-adressen hos Render. |
+
+**Spillerne bruker fortsatt e-post og passord i løsningen vi har laget.** Hvis dere også ønsker «Logg inn med GitHub» inne i spillet, må vi aktivere GitHub som innloggingsleverandør i Supabase Auth og tilpasse Python-klienten til OAuth. Java-API-et kan fortsatt verifisere Supabase-tokenene på samme måte.
+
+## 12. Valg av databasetilkobling
+
+**Dato:** 2026-10-27 kl. 20:40:05
+
+### Bruker
+
+I supabase, bør jeg velge transaction pooler eller direct connection?
+
+### Assistent
+
+**Velg «Session pooler» til oppsettet vårt på Render Free.** Det er et tredje alternativ i Supabase sitt **Connect**-panel.
+
+| Alternativ | Passer for oss? |
+|---|---|
+| **Session pooler** | **Anbefalt.** Støtter IPv4 og fungerer med den langvarige Java-serveren, JDBC og Flyway. |
+| **Direct connection** | Fungerer hvis serveren har nettverkstilgang til databaseadressen. Supabase sin standard direkteadresse bruker normalt IPv6, som kan være en hindring fra hostingmiljøet eller lokalt. |
+| **Transaction pooler** | Ikke anbefalt med dagens konfigurasjon. Transaksjonspooling har begrensninger for sesjonsfunksjoner og prepared statements og krever særskilt tilpasning av JDBC/Flyway-oppsettet. |
+
+Bruk verdiene Supabase viser for **Session pooler**:
+
+```text
+DATABASE_URL=jdbc:postgresql://<pooler-host>:5432/postgres?sslmode=verify-full
+DATABASE_USERNAME=postgres.<project-ref>
+DATABASE_PASSWORD=<databasepassordet>
+```
+
+Kopier faktisk vertsnavn, port og brukernavn fra panelet; eksemplet viser vanlig format. Passordet legges i `DATABASE_PASSWORD`, ikke i URL-en. Med `verify-full` må serveren også ha riktig CA-sertifikat konfigurert, som beskrevet i README.
+
+## 13. Oversette Supabase-adressen til miljøvariabler
+
+**Dato:** 2026-10-27 kl. 20:42:13
+
+### Bruker
+
+Jeg fikk denne:
+postgresql://postgres.sghwafwnxfqcbdpiabnq:[YOUR-PASSWORD]@aws-0-eu-west-1.pooler.supabase.com:5432/postgres
+
+### Assistent
+
+**Ja, dette er en pooler-adresse på port 5432, som passer med Session pooler.** Fordel den slik i miljøvariablene til Java-serveren:
+
+```text
+DATABASE_URL=jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full
+DATABASE_USERNAME=postgres.sghwafwnxfqcbdpiabnq
+DATABASE_PASSWORD=<databasepassordet ditt>
+```
+
+Bytt ut `<databasepassordet ditt>` med passordet til databasen, uten vinkelparenteser. Ikke bruk GitHub-passordet og ikke del databasepassordet her.
+
+**Merk TLS-sertifikatet:** `sslmode=verify-full` krever at PostgreSQL-driveren stoler på sertifikatet. Last ned riktig CA-sertifikat fra Supabase sine database-/SSL-innstillinger og gjør det tilgjengelig på serveren. Oppgi filbanen i URL-en ved behov:
+
+```text
+DATABASE_URL=jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=/sti/til/sertifikat.crt
+```
+
+Legg variablene i **Environment** hos Render, eller som miljøvariabler i IntelliJ for lokal kjøring. `SUPABASE_URL` må fortsatt settes separat til prosjektets API-URL, ikke databaseadressen.
+
+## 14. Installere Supabase agent skills
+
+**Dato:** 2026-10-27 kl. 20:46:06
+
+### Bruker
+
+```sh
+npx skills add supabase/agent-skills
+```
+
+### Assistent
+
+Kommandoen kunne ikke kjøres fordi **`npx` ikke er tilgjengelig** i dette miljøet. Ingen skills ble installert.
+
+Installer Node.js LTS, som inkluderer npm og npx, og kjør deretter fra prosjektmappen:
+
+```sh
+npx skills add supabase/agent-skills
+```
+
+## 15. Verdi for SUPABASE_URL
+
+**Dato:** 2026-10-27 kl. 20:49:09
+
+### Bruker
+
+hva skal stå under SUPABASE_URL
+
+### Assistent
+
+Basert på prosjekt-ID-en i databaseadressen din skal verdien være:
+
+```text
+SUPABASE_URL=https://sghwafwnxfqcbdpiabnq.supabase.co
+```
+
+I Render legger du inn **`SUPABASE_URL`** som navn og **`https://sghwafwnxfqcbdpiabnq.supabase.co`** som verdi under **Environment**.
+
+Ikke legg til `/auth/v1` — Java-serveren legger til dette selv. I `render.yaml` kan du beholde `sync: false`; da oppgir du verdien i Render, ikke i filen.
+
+## 16. GitHub Variables/Secrets eller Render Environment
+
+**Dato:** 2026-10-27 kl. 20:51:18
+
+### Bruker
+
+Jeg har lagt inn disse variablene i github secrets->actions som Variables, og passordet som Secret. Er det riktig?
+
+### Assistent
+
+**Passord som Secret er riktig, men servervariablene må legges inn hos Render med oppsettet vårt.** GitHub Variables/Secrets overføres ikke automatisk til Render.
+
+| Hvor | Hva skal ligge der |
+|---|---|
+| **Render → tjenesten → Environment** | `SUPABASE_URL`, `DATABASE_URL`, `DATABASE_USERNAME` og `DATABASE_PASSWORD` |
+| **GitHub → Settings → Secrets and variables → Actions → Secrets** | `RENDER_DEPLOY_HOOK_URL` |
+
+GitHub Actions bruker bare deploy-hooken til å be Render bygge og starte serveren. Serveren leser databaseinnstillingene fra **Render**, ikke GitHub.
+
+Du trenger derfor ikke databasevariablene i GitHub for denne arbeidsflyten. Når de er lagt inn hos Render, kan de fjernes fra GitHub. **Ikke legg passordet i Variables eller i `render.yaml`.**
+
+## 17. Encrypted password for local Supabase connections
+
+**Dato:** 2026-10-27 kl. 21:35:45
+
+### Bruker
+
+Can we have encryptet password in this app so that we can test from locally but connect to supabase?
+
+### Assistent – clarification
+
+Assuming you mean the Supabase database password: yes, the Java server can run locally against Supabase without saving that password in plaintext. Which storage approach would you prefer? The database credential must stay in the Java server, never in the distributed Python game.
+
+Choices: macOS Keychain (recommended), or an encrypted local file unlocked with a master password at startup.
+
+### Bruker – selected option
+
+Encrypted local file: unlock with a master password at startup
+
+### Assistent – status
+
+I’ll add an encrypted local password file that you unlock at startup. The master password will be entered through a hidden terminal prompt, not saved in configuration. Render will continue using its existing environment variable.
+
+### Assistent – final response
+
+**Implemented encrypted local password storage.** You can run the Java server locally against Supabase and unlock the database password at startup.
+
+Create the encrypted file once from a terminal:
+
+```sh
+mvn -DskipTests package
+mkdir -p .local-secrets
+chmod 700 .local-secrets
+java -jar target/game-stat-api-0.0.1-SNAPSHOT.jar \
+  --encrypt-local-password .local-secrets/supabase-password.enc
+```
+
+You’ll be prompted for a master passphrase, confirmation, and the database password. Input is hidden.
+
+To start the server, set `SUPABASE_URL`, `DATABASE_URL`, and `DATABASE_USERNAME` as before, then run:
+
+```sh
+unset DATABASE_PASSWORD
+java -jar target/game-stat-api-0.0.1-SNAPSHOT.jar \
+  --local-password-file .local-secrets/supabase-password.enc
+```
+
+Enter the master passphrase to unlock it. Use a real terminal, such as IntelliJ’s Terminal tab.
+
+The file uses **AES-256-GCM**, is excluded from Git, and does not contain the master passphrase. Render’s setup is unchanged. This protects the password on disk; it still has to exist in server memory while connecting. Full instructions are in [README.md](README.md).
+
+## 18. No master-password prompt on Render
+
+**Dato:** 2026-10-27 kl. 21:38:17
+
+### Bruker
+
+Its important that the master password is only asked for if we run locally. On render it should just start
+
+### Assistent
+
+**That’s already how it works.** The master-password prompt is opt-in, not automatic:
+
+- **Locally:** supplying `--local-password-file ...` prompts for the master password.
+- **Render:** the Docker startup command does not supply that option, so the server starts without a prompt and uses `DATABASE_PASSWORD` from Render’s environment.
+
+No master password or encrypted password file needs to be configured on Render.
+
+## 19. Launcher for the Python example
+
+**Dato:** 2026-10-27 kl. 22:05:08
+
+### Bruker
+
+Set up a script that can run the example python, the variables you need are here:
+
+```text
+GAME_API_URL=https://viktor-game-api.onrender.com
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_4mmrRASle-Xv8l1-qJqQJA_srF6z1i4
+SUPABASE_URL=jdbc:postgresql://aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+### Assistent – status
+
+I’ll add a launcher for signup and login. The supplied `SUPABASE_URL` is a database connection string; the Python client needs `https://sghwafwnxfqcbdpiabnq.supabase.co` instead. I’ll also move those settings out of `requirements.txt`, which must contain only package dependencies.
+
+### Assistent – final response
+
+Added [examples/python/run_example.sh](examples/python/run_example.sh). Run from the project directory:
+
+```sh
+./examples/python/run_example.sh signup
+# Confirm your email, then:
+./examples/python/run_example.sh login
+```
+
+The script sets up the Python environment, installs dependencies, and prompts for your email and password.
+
+**Corrected `SUPABASE_URL` to `https://sghwafwnxfqcbdpiabnq.supabase.co`.** The JDBC URL is only for the Java server’s database connection. The launcher includes your Render URL and publishable key; no database password is needed.

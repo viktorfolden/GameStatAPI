@@ -72,7 +72,81 @@ not database or Supabase readiness. Every `/v1` request needs:
 Authorization: Bearer <Supabase access token>
 ```
 
+### Encrypted database password for local development
+
+The local Java server can connect to Supabase using a password encrypted on disk.
+The master passphrase is entered at a hidden terminal prompt and is never saved.
+Render continues to use `DATABASE_PASSWORD` as before; no changes there are needed.
+This feature belongs to the backend only. Never distribute database credentials
+or this encrypted file with the Python game.
+
+Build the application and create a private local directory:
+
+```sh
+mvn -DskipTests package
+mkdir -p .local-secrets
+chmod 700 .local-secrets
+java -jar target/game-stat-api-0.0.1-SNAPSHOT.jar \
+  --encrypt-local-password .local-secrets/supabase-password.enc
+```
+
+Enter and confirm a strong, unique master passphrase (at least 16 characters),
+then enter the Supabase database password. Creation does not contact Supabase
+or start the server, and refuses to overwrite an existing file.
+The file uses AES-256-GCM authenticated encryption and PBKDF2-HMAC-SHA256 with
+600,000 iterations and a random salt. Each encryption also uses a fresh nonce.
+On macOS/Linux the file is created with owner-only permissions (`600`).
+On other systems, restrict access using the OS file-permission controls.
+`.local-secrets/` is excluded from Git, and the Docker build excludes local files.
+Do not commit the encrypted file or store its master passphrase beside it.
+
+Set the usual `SUPABASE_URL`, `DATABASE_URL`, and `DATABASE_USERNAME` environment
+variables, including verified TLS/CA configuration described above, then start:
+
+```sh
+unset DATABASE_PASSWORD
+java -jar target/game-stat-api-0.0.1-SNAPSHOT.jar \
+  --local-password-file .local-secrets/supabase-password.enc
+```
+
+Enter the master passphrase when prompted. A wrong passphrase, corrupt file,
+missing file, or non-interactive terminal stops startup instead of falling back.
+Run these commands in a real terminal, including IntelliJ's Terminal tab;
+the standard IDE Run console and `mvn spring-boot:run` may not provide the
+interactive Java console this mode requires.
+
+The decrypted value supplies the default `DATABASE_PASSWORD` property.
+Existing environment variables, system properties, or explicit datasource
+configuration take precedence; unset password overrides to use this file.
+The password necessarily exists in the Java process's memory while JDBC uses it.
+This protects storage at rest, not an already-compromised machine or memory dumps.
+The master passphrase cannot be recovered; if lost, reset/retrieve the database
+credential through your administrator and create a new encrypted file.
+
 ## 3. Connect the Python game
+
+To run the example against our Render/Supabase deployment from macOS or Linux:
+
+```sh
+./examples/python/run_example.sh signup
+./examples/python/run_example.sh login
+```
+
+The launcher creates `.venv` if needed, installs the declared dependencies, and
+asks for email/password interactively. Confirm your email before logging in.
+With no argument it defaults to `login`. It can be invoked from any working
+directory. Python 3 with `venv` and pip support is required.
+
+The launcher defaults to `https://viktor-game-api.onrender.com` and the project's
+Supabase HTTPS URL and public publishable key. These are client configuration,
+not database credentials. Override them using environment variables when needed:
+
+```sh
+GAME_API_URL=http://localhost:8080 ./examples/python/run_example.sh login
+```
+
+`SUPABASE_URL` must be the project's **HTTPS API URL**, never a JDBC/PostgreSQL
+connection string. No database password is needed by the Python client.
 
 The reusable example is in `examples/python/game_client.py`.
 It supports signup, login, logout, token renewal, submitting rounds, profiles,
