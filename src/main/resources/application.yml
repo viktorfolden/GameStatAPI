@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: viktor-game-api
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+  flyway:
+    default-schema: game
+    schemas: game
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      accept-float-as-int: false
+    mapper:
+      allow-coercion-of-scalars: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+supabase:
+  issuer: ${SUPABASE_URL}/auth/v1
+  audience: authenticated
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never

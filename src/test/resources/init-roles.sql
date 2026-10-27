@@ -1,0 +1,2 @@
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE authenticated NOLOGIN;
