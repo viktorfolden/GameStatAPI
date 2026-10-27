@@ -206,3 +206,139 @@ Skriv ned logg med det jeg har spurt om og det du har svart på i en md-fil. Den
 ### Assistent
 
 Opprettet [SAMTALELOGG.md](SAMTALELOGG.md) med spørsmålene dine, svarene mine og avklaringen om å bruke Java. Jeg oppdaterer loggen videre underveis i samtalen.
+
+## 6. Gratis skytjenester for utrulling
+
+**Dato:** 2026-10-27 kl. 19:24:36
+
+### Bruker
+
+Foreslå noen gratis skytjenester vi kan bruke til å deploye denne på?
+
+### Assistent
+
+**Jeg ville startet med Render Free til Java-API-et og Supabase Free til database og innlogging.** Det passer godt til en prototype eller et lite hobbyspill, og prosjektet har allerede en `Dockerfile` vi kan bruke.
+
+Disse tre er aktuelle for Java-serveren:
+
+| Tjeneste | Gratis tilbud | Viktige begrensninger |
+|---|---|---|
+| **[Render](https://render.com/docs/free)** | Gratis webtjeneste med Docker-støtte. 750 kjøretimer per måned, delt mellom gratistjenestene i arbeidsområdet. | Går i dvale etter 15 minutter uten trafikk. Oppvåkning tar omtrent ett minutt. Egne kvoter for bygg og utgående trafikk. |
+| **[Koyeb](https://www.koyeb.com/docs/reference/instances)** | Én gratis instans per organisasjon med 512 MB RAM og 0,1 vCPU. Kan plasseres i Frankfurt. | Går i dvale etter én time uten trafikk. Lite CPU og minne kan bli trangt for Spring Boot, særlig ved oppstart. |
+| **[Google Cloud Run](https://cloud.google.com/run/pricing)** | Kjører Docker-containere med månedlige gratiskvoter for forespørsler, CPU og minne. | Krever faktureringskonto. Overforbruk og tilleggstjenester kan koste penger. Mer oppsett enn Render. |
+
+Render og Koyeb beskriver gratisinstansene som egnet for testing og hobbyprosjekter, ikke ordinær produksjonsdrift.
+
+**Behold Supabase til data og innlogging.** [Gratisplanen](https://supabase.com/pricing) inkluderer PostgreSQL med 500 MB database og Supabase Auth. Prosjekter pauses etter én uke uten aktivitet. Supabase kjører ikke selve Spring Boot-serveren; den må ligge hos en av tjenestene over.
+
+For vårt prosjekt ville oppsettet blitt:
+
+```text
+Python-spill ── innlogging ──> Supabase Auth
+     │
+     └── resultater/statistikk ──> Java-API på Render
+                                         │
+                                         └──> PostgreSQL hos Supabase
+```
+
+**To ting å passe på:** Bruk Supabase-databasen, ikke Render sin gratis PostgreSQL-database, som utløper etter 30 dager. Python-klienten vår har dessuten 15 sekunders lesetidsgrense; ved oppvåkning på Render bør spillet vise «kobler til» og kunne prøve igjen, med samme runde-ID ved innsending.
+
+Gratis betyr her **innenfor kvotene**, ikke ubegrenset drift. Cloud Run kan være et godt neste steg dersom dere vil skalere, men budsjettvarsler er ikke et automatisk kostnadstak.
+
+## 7. Kostnadsrisiko og sperrer i Google Cloud Run
+
+**Dato:** 2026-10-27 kl. 20:13:57
+
+### Bruker
+
+Betyr det at for google cloud run så kan vi risikere at det begynner å koste penger uten at vi kan sperre for det?
+
+### Assistent
+
+**Ja, det kan begynne å koste penger på en betalt faktureringskonto hvis dere overskrider gratiskvotene. Men det finnes sperrer — mitt forrige svar var litt for upresist.**
+
+Google dokumenterer nå **«spend cap budgets» for Cloud Run**, som automatisk stanser ny bruk når en valgt månedsgrense nås. Det er noe annet enn et vanlig budsjettvarsel, som bare sender varsler.
+
+| Mekanisme | Hva den gjør |
+|---|---|
+| Vanlig budsjettvarsel | Varsler om forbruk; stopper ikke tjenesten. |
+| Spend cap for Cloud Run | Stanser ny bruk for den valgte tjenesten i prosjektet når grensen nås. Åpnes automatisk neste måned. |
+| Maksimalt antall instanser | Begrenser skalering, men er ikke et kostnadstak. |
+
+**En spend cap er likevel ikke en garanti for en totalregning på nøyaktig 0 kr.** Den bruker estimerte bruttokostnader før gratiskreditter og rabatter. Pågående forespørsler kan fullføres og koste penger, og andre tjenester som bygg, containerlagring og logging må håndteres separat. Google opplyser også at vedvarende ressurser ikke nødvendigvis stoppes av sperren.
+
+For dere betyr det: Cloud Run har bedre kostnadskontroll enn bare e-postvarsler, men jeg ville fortsatt valgt **Render Free + Supabase Free** hvis viktigste krav er enkel oppstart uten løpende forbruksfakturering. Pass da på å holde dere på gratisplanene og ikke aktivere betalte tillegg.
+
+Kilde: [Googles dokumentasjon om spend cap budgets](https://docs.cloud.google.com/billing/docs/how-to/budgets-spend-caps).
+
+## 8. GitHub Actions og Render Free
+
+**Dato:** 2026-10-27 kl. 20:17:12
+
+### Bruker
+
+Ok, da kjører vi på Render free, kan vi få github actions til å deploye dit?
+
+### Assistent – statusmelding
+
+Ja. Jeg legger opp GitHub Actions til å kjøre testene og deretter be Render deploye den samme commiten fra `main`. Deploy-hooken lagres som en GitHub-hemmelighet; Supabase- og databaseinnstillingene blir liggende hos Render.
+
+### Assistent – avsluttende svar
+
+**Ja — oppsettet er lagt til.** GitHub Actions kjører Java- og Python-testene og bygger Docker-imaget. Når alt lykkes på `main`, sendes en deploy-forespørsel til Render for akkurat den commiten.
+
+Du må gjøre dette én gang:
+
+1. Push prosjektet til GitHub med en `main`-branch.
+2. Opprett en **Blueprint** i Render fra repoet. Filen [render.yaml](render.yaml) velger **Free** og Frankfurt.
+3. Legg inn Supabase- og databasevariablene i Render.
+4. Kopier **Deploy Hook URL** fra Render og lagre den som GitHub Actions-secret **`RENDER_DEPLOY_HOOK_URL`**.
+5. La Render **Auto-Deploy være avslått**, slik at videre deployer styres av GitHub Actions.
+
+Arbeidsflyten ligger i [.github/workflows/render-deploy.yml](.github/workflows/render-deploy.yml), og detaljert oppsett er lagt til i [README.md](README.md).
+
+**Ingenting er deployet ennå.** En vellykket deploy-jobb bekrefter at Render har mottatt forespørselen; selve utrullingen følges i Render.
+
+## 9. Hovedbranch heter master
+
+**Dato:** 2026-10-27 kl. 20:22:13
+
+### Bruker
+
+btw. hoved branch i mitt github repo heter "master"
+
+### Assistent
+
+Oppdatert til **`master`** i GitHub Actions, Render-oppsettet og README. Automatisk deploy skjer nå etter vellykket kjøring på `master`. Avklaringen er også lagt til i samtaleloggen.
+
+## 10. Kjøre serveren lokalt
+
+**Dato:** 2026-10-27 kl. 20:22:55
+
+### Bruker
+
+Er det mulig å kjøre denne serveren lokalt også?
+
+### Assistent
+
+**Ja, serveren kan kjøres lokalt uten Render.** Den enkleste løsningen er å kjøre Java-API-et på maskinen din og fortsatt bruke Supabase til database og innlogging.
+
+1. Ha **Java 21 eller nyere** og **Maven** installert.
+2. Sett `SUPABASE_URL`, `DATABASE_URL`, `DATABASE_USERNAME` og `DATABASE_PASSWORD` som miljøvariabler, for eksempel i IntelliJ sin kjørekonfigurasjon. Verdiene er beskrevet i [.env.example](.env.example). En `.env`-fil leses ikke automatisk.
+3. Start fra prosjektmappen:
+
+```sh
+mvn spring-boot:run
+```
+
+Serveren blir tilgjengelig på **http://localhost:8080**. Åpne `http://localhost:8080/health` for å se om prosessen svarer.
+
+I Python-spillet setter du:
+
+```text
+GAME_API_URL=http://localhost:8080
+```
+
+Innlogging og API-kall krever fortsatt Supabase-oppsettet og gyldige tilgangstokens. Bruk helst et **eget Supabase-prosjekt til utvikling**, så lokale spillrunder ikke blandes med produksjonsdata.
+
+Du kan også starte `GameApiApplication` direkte fra IntelliJ. Helt lokal drift med lokal PostgreSQL og lokal Supabase Auth er mulig, men det krever ekstra oppsett; dagens enkleste oppsett trenger internett til Supabase.

@@ -219,7 +219,7 @@ No live Supabase account or cloud credentials are required for these tests.
 
 ```sh
 mvn -DskipTests package
-java -jar target/game-api-0.0.1-SNAPSHOT.jar
+java -jar target/game-stat-api-0.0.1-SNAPSHOT.jar
 ```
 
 Or build the non-root container image:
@@ -232,6 +232,53 @@ Supply the server environment variables through your cloud service's secret
 configuration. Expose port `8080` (or `PORT`) behind an HTTPS load balancer.
 Keep the database private where supported and use verified TLS connections.
 The Docker build context excludes environment files and other local files.
+
+### Render Free with GitHub Actions
+
+The workflow in `.github/workflows/render-deploy.yml` runs Java integration tests,
+Python client tests, and a Docker build for pull requests to `master` and pushes to
+`master`. Only a successful run on `master` requests a Render deployment. You can also
+run it manually from GitHub Actions; deployment is still restricted to `master`.
+GitHub-hosted Ubuntu runners provide Docker for the PostgreSQL integration tests.
+
+Initial setup:
+
+1. Push this project to a GitHub repository with a `master` branch.
+2. In Render, create a **Blueprint** connected to that repository and use the
+   included `render.yaml`. It creates one **Free** Docker web service in Frankfurt,
+   with `/health` as its health-check path. It does not create a paid database.
+3. Enter `SUPABASE_URL`, `DATABASE_URL`, `DATABASE_USERNAME`, and
+   `DATABASE_PASSWORD` in Render when prompted. Use the Supabase session pooler
+   if required for IPv4, and configure verified database TLS as described above.
+   Render's first deployment starts during service creation; the GitHub workflow
+   controls subsequent deployments.
+4. Leave Render **Auto-Deploy disabled** (`autoDeployTrigger: "off"` in the
+   Blueprint), so Render does not deploy untested commits independently of Actions.
+5. Copy the service's **Deploy Hook URL** from Render's Settings. In GitHub, open
+   **Settings > Secrets and variables > Actions** and add a repository secret named
+   `RENDER_DEPLOY_HOOK_URL`. Treat the entire URL as a password; never commit it.
+6. Push a commit to `master`, or run **Test and deploy to Render** manually on `master`.
+   Set the Python client's `GAME_API_URL` to the service's HTTPS `onrender.com` URL.
+
+The hook includes the tested commit SHA, not just "latest master". Database credentials
+stay in Render; Actions only needs the deploy hook. Protect `master` with required
+reviews and the **Test and build** status check before merging.
+
+A green deploy job means **Render accepted the request**, not that the new version
+is live. Check Render's deployment logs and health status for rollout success.
+The workflow does not retry the deploy hook automatically, avoiding duplicate deploys
+after ambiguous network failures. If a request fails, check Render before rerunning.
+
+The Blueprint limits JVM heap to 60% of the container's RAM, leaving room for
+non-heap memory; total Java memory consumption is not capped by this setting.
+Monitor memory usage on the small free instance.
+
+Render Free sleeps after 15 idle minutes and can take about a minute to wake.
+The example client's 15-second read timeout can expire during wake-up. The game
+should display a connection state and allow retrying the same round ID and payload.
+Free service/build/bandwidth quotas and GitHub Actions allowances still apply;
+private repositories may have metered Actions usage beyond their included minutes.
+Keep paid upgrades and extra usage billing disabled if zero cost is a requirement.
 
 Before exposing this to real players, configure gateway request-size limits
 (for example 16 KiB for these small JSON requests), per-user/IP request limits,
