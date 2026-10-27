@@ -137,6 +137,21 @@ asks for email/password interactively. Confirm your email before logging in.
 With no argument it defaults to `login`. It can be invoked from any working
 directory. Python 3 with `venv` and pip support is required.
 
+Submit a round after signing in interactively:
+
+```sh
+./examples/python/run_example.sh submit \
+  --run-id 42679d81-b0d7-4661-9ac9-d7879f309ffc \
+  --score 12500 --hits 85 --misses 15 \
+  --enemies-killed 32 --play-time-seconds 420
+```
+
+The command displays the saved round and updated statistics. Use a new UUID for
+each new round, but repeat the exact command to retry an interrupted submission.
+Player identity comes from login, not a player ID argument.
+Use `submit --help` for all options. On Render cold starts the request may time
+out; repeat the same command rather than changing the round ID.
+
 The launcher defaults to `https://viktor-game-api.onrender.com` and the project's
 Supabase HTTPS URL and public publishable key. These are client configuration,
 not database credentials. Override them using environment variables when needed:

@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import requests
 
-from game_client import GameClient, LoginRequiredError
+from game_client import GameClient, LoginRequiredError, main
 
 
 def response(status: int, data: dict) -> requests.Response:
@@ -100,6 +100,48 @@ class GameClientTest(unittest.TestCase):
         ]:
             with self.subTest(url=url), self.assertRaises(ValueError):
                 GameClient("https://example.supabase.co", "sb_publishable_example", url)
+
+
+class CommandLineTest(unittest.TestCase):
+    def test_submit_logs_in_and_passes_round_fields(self):
+        run_id = uuid4()
+        args = [
+            "game_client.py", "submit", "--run-id", str(run_id), "--score", "12500",
+            "--hits", "85", "--misses", "15", "--enemies-killed", "32",
+            "--play-time-seconds", "420",
+        ]
+        with patch("sys.argv", args), patch.dict("os.environ", {
+            "SUPABASE_URL": "https://example.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": "public-key",
+            "GAME_API_URL": "http://localhost:8080",
+        }), patch("game_client.GameClient") as factory, \
+                patch("builtins.input", return_value="player@example.com"), \
+                patch("game_client.getpass", return_value="password"), patch("builtins.print"):
+            client = factory.return_value
+            client.submit_run.return_value = {"score": 12500}
+            client.my_stats.return_value = {"runsPlayed": 1}
+            main()
+            client.sign_in.assert_called_once_with("player@example.com", "password")
+            client.submit_run.assert_called_once_with(
+                run_id=run_id, leaderboard_id="default", score=12500, hits=85,
+                misses=15, enemies_killed=32, play_time_seconds=420,
+            )
+            client.my_stats.assert_called_once()
+            client.sign_out.assert_called_once()
+
+    def test_invalid_submit_stops_before_login(self):
+        base = [
+            "game_client.py", "submit", "--run-id", str(uuid4()), "--score", "-1",
+            "--hits", "0", "--misses", "0", "--enemies-killed", "0",
+            "--play-time-seconds", "0",
+        ]
+        for args in [base, ["game_client.py", "submit"]]:
+            with self.subTest(args=args), patch("sys.argv", args), \
+                    patch("sys.stderr"), patch("game_client.GameClient") as factory:
+                with self.assertRaises(SystemExit) as error:
+                    main()
+                self.assertEqual(error.exception.code, 2)
+                factory.assert_not_called()
 
 
 if __name__ == "__main__":

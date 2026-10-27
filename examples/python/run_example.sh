@@ -9,23 +9,19 @@ if [[ $# -eq 0 ]]; then
   set -- login
 fi
 case "$1" in
-  login|signup) ;;
+  login|signup|submit) ;;
   -h|--help)
-    echo "Usage: $0 [login|signup] (default: login)"
+    echo "Usage: $0 [login|signup|submit] [options] (default: login)"
+    echo "Submit options: --run-id UUID --score N --hits N --misses N --enemies-killed N --play-time-seconds N"
     echo "Creates .venv if needed and installs the example's dependencies."
     echo "Override SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, or GAME_API_URL via environment variables."
     exit 0
     ;;
   *)
-    echo "Usage: $0 [login|signup]" >&2
+    echo "Usage: $0 [login|signup|submit] [options]" >&2
     exit 2
     ;;
 esac
-if [[ $# -ne 1 ]]; then
-  echo "Expected only login or signup; credentials are entered interactively." >&2
-  exit 2
-fi
-
 export SUPABASE_URL="${SUPABASE_URL:-https://sghwafwnxfqcbdpiabnq.supabase.co}"
 export SUPABASE_PUBLISHABLE_KEY="${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_4mmrRASle-Xv8l1-qJqQJA_srF6z1i4}"
 export GAME_API_URL="${GAME_API_URL:-https://viktor-game-api.onrender.com}"

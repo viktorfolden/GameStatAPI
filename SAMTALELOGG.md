@@ -584,3 +584,77 @@ Added [examples/python/run_example.sh](examples/python/run_example.sh). Run from
 The script sets up the Python environment, installs dependencies, and prompts for your email and password.
 
 **Corrected `SUPABASE_URL` to `https://sghwafwnxfqcbdpiabnq.supabase.co`.** The JDBC URL is only for the Java server’s database connection. The launcher includes your Render URL and publishable key; no database password is needed.
+
+## 20. Opprettelse av spillerkonto
+
+**Dato:** 2026-10-27 kl. 22:10:13
+
+### Bruker
+
+The python script did not let me make a new user, and I dont have one from before
+
+### Avklaring og svar (sammendrag)
+
+Brukeren bekreftet at skriptet var startet uten argumenter / via Run i IDE.
+Assistenten forklarte at dette velger login, og anbefalte
+`./examples/python/run_example.sh signup`, bekreftelse av e-post og deretter
+`./examples/python/run_example.sh login`. Alternativt kan Script options i IDE
+settes til `signup`.
+
+## 21. Innsending av poeng med curl
+
+**Dato:** 2026-10-27 kl. 22:18:35
+
+### Bruker
+
+gi meg noen curl setninger for å poste scores på denne brukeren:
+
+```json
+{
+  "playerId": "cde94edd-ad7e-431a-9d40-c61932e59deb",
+  "runsPlayed": 0,
+  "bestScore": 0,
+  "hits": 0,
+  "misses": 0,
+  "enemiesKilled": 0,
+  "playTimeSeconds": 0,
+  "accuracyPercent": null
+}
+```
+
+### Assistent (sammendrag)
+
+Forklarte at spilleren bestemmes av tilgangstokenet, ikke en playerId i payloaden.
+Ga kommandoer for Supabase-innlogging med skjult passordprompt, lagring av
+access_token i en shellvariabel, to POST-kall med forskjellige faste runde-ID-er
+og et GET-kall for egen statistikk. Påpekte at samme runde-ID/payload skal brukes
+ved retry, og at Render kan bruke tid på å våkne.
+
+## 22. Sende poeng med run_example.sh
+
+**Dato:** 2026-10-27 kl. 22:19:43
+
+### Bruker
+
+Kan vi gjøre det med run_example.sh?
+
+### Assistent
+
+Ja — lagt til kommandoen **`submit`**. Kjør:
+
+```sh
+./examples/python/run_example.sh submit \
+  --run-id 42679d81-b0d7-4661-9ac9-d7879f309ffc \
+  --score 12500 \
+  --hits 85 \
+  --misses 15 \
+  --enemies-killed 32 \
+  --play-time-seconds 420
+```
+
+Du blir bedt om e-post og passord. Runden lagres på brukeren du logger inn som,
+og skriptet viser den lagrede runden og oppdatert statistikk.
+
+**Bruk ny `--run-id` for hver ny runde.** Ved timeout eller nettverksfeil,
+kjør nøyaktig samme kommando igjen; da telles ikke runden dobbelt.
+På Mac kan du generere en ny ID med `uuidgen`.

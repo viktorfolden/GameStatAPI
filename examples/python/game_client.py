@@ -142,9 +142,23 @@ class GameClient:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sign up or sign in and show your game statistics")
-    parser.add_argument("action", choices=["signup", "login"])
+    parser = argparse.ArgumentParser(description="Create an account, show statistics, or submit a round")
+    actions = parser.add_subparsers(dest="action", required=True)
+    actions.add_parser("signup")
+    actions.add_parser("login")
+    submit = actions.add_parser("submit", help="Sign in and submit one round")
+    submit.add_argument("--run-id", type=UUID, required=True,
+                        help="Unique round UUID; reuse with the same data when retrying")
+    submit.add_argument("--leaderboard-id", default="default")
+    for flag in ["score", "hits", "misses", "enemies-killed", "play-time-seconds"]:
+        submit.add_argument(f"--{flag}", type=int, required=True)
     args = parser.parse_args()
+    if args.action == "submit":
+        for field in ["score", "hits", "misses", "enemies_killed", "play_time_seconds"]:
+            value = getattr(args, field)
+            maximum = 2**63 - 1 if field == "score" else 2**31 - 1
+            if not 0 <= value <= maximum:
+                parser.error(f"--{field.replace('_', '-')} must be between 0 and {maximum}")
     client = GameClient(
         os.environ["SUPABASE_URL"],
         os.environ["SUPABASE_PUBLISHABLE_KEY"],
@@ -158,6 +172,21 @@ def main() -> None:
     else:
         client.sign_in(email, password)
         del password
+        if args.action == "submit":
+            print(f"Submitting round {args.run_id}. Retry with the same ID and data if the request fails.",
+                  flush=True)
+            saved = client.submit_run(
+                run_id=args.run_id,
+                leaderboard_id=args.leaderboard_id,
+                score=args.score,
+                hits=args.hits,
+                misses=args.misses,
+                enemies_killed=args.enemies_killed,
+                play_time_seconds=args.play_time_seconds,
+            )
+            print("Saved round:")
+            print(json.dumps(saved, indent=2))
+        print("Player statistics:")
         print(json.dumps(client.my_stats(), indent=2))
         client.sign_out()
 
