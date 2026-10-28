@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import static no.viktor.game.ApiModels.*;
 
@@ -70,6 +71,15 @@ class GameService {
 
     public List<Leaderboard> leaderboards() {
         return repository.leaderboards();
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public RoundSummary roundSummary(UUID playerId, UUID runId) {
+        RunResponse run = repository.run(playerId, runId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Round not found"));
+        return new RoundSummary(run.runId(), run.leaderboardId(),
+                repository.previousRounds(playerId, run),
+                repository.bestOtherPlayer(run.leaderboardId(), playerId).orElse(null));
     }
 
     public LeaderboardPage scores(String id, int limit, int offset) {

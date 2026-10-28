@@ -102,6 +102,25 @@ class GameRepository {
                 this::mapEntry, leaderboardId, limit, offset);
     }
 
+    RoundBaseline previousRounds(UUID playerId, RunResponse run) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) AS rounds_played, AVG(score) AS average_score,
+                       AVG(enemies_killed) AS average_kills,
+                       100.0 * SUM(hits) / NULLIF(SUM(hits::bigint + misses), 0) AS accuracy_percent
+                FROM game.runs
+                WHERE player_id = ? AND leaderboard_id = ? AND id <> ? AND submitted_at <= ?
+                """, (rs, row) -> new RoundBaseline(rs.getLong("rounds_played"),
+                rs.getBigDecimal("average_score"), rs.getBigDecimal("average_kills"),
+                rs.getBigDecimal("accuracy_percent")),
+                playerId, run.leaderboardId(), run.runId(), run.submittedAt());
+    }
+
+    Optional<LeaderboardEntry> bestOtherPlayer(String leaderboardId, UUID playerId) {
+        return jdbc.query(RANKED_SCORES
+                        + "SELECT * FROM ranked WHERE player_id <> ? ORDER BY position LIMIT 1",
+                this::mapEntry, leaderboardId, playerId).stream().findFirst();
+    }
+
     List<LeaderboardEntry> neighbors(String leaderboardId, UUID playerId) {
         return jdbc.query(RANKED_SCORES + """
                 SELECT * FROM ranked

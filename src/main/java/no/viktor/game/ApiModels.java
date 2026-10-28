@@ -40,6 +40,12 @@ public final class ApiModels {
                         long misses, long enemiesKilled, long playTimeSeconds,
                         BigDecimal accuracyPercent) {}
 
+    public record RoundBaseline(long roundsPlayed, BigDecimal averageScore,
+                                BigDecimal averageKills, BigDecimal accuracyPercent) {}
+
+    public record RoundSummary(UUID runId, String leaderboardId, RoundBaseline previous,
+                               LeaderboardEntry bestOtherPlayer) {}
+
     public record Leaderboard(String id, String name, String gameVersion, String gameMode,
                               String difficulty, String season, boolean acceptingRuns) {}
 

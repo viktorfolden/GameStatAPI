@@ -114,6 +114,9 @@ class GameClient:
     def my_stats(self):
         return self._request("GET", "/v1/me/stats")
 
+    def round_summary(self, run_id: UUID):
+        return self._request("GET", f"/v1/runs/{run_id}/summary")
+
     def player_stats(self, player_id: UUID):
         return self._request("GET", f"/v1/players/{player_id}/stats")
 

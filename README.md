@@ -125,6 +125,86 @@ credential through your administrator and create a new encrypted file.
 
 ## 3. Connect the Python game
 
+### Play the arcade demo
+
+An original, simple alien-shooter demo is included in `examples/python/space_demo.py`.
+Start it from a terminal (IntelliJ's Terminal tab also works):
+
+```sh
+./examples/python/run_example.sh game
+```
+
+The launcher installs `pygame-ce` in the existing virtual environment. Choose
+**L** to log in or **S** to sign up using email/password in the terminal.
+After signup, confirm your email and run the command again with **L**.
+After login, a game window opens. No database credentials are used by the game.
+
+| Key | Action |
+|---|---|
+| Enter | Start a round / start the next round after saving |
+| Left/right arrows or A/D | Move |
+| Space (hold) | Shoot |
+| P | Pause/resume; losing focus also pauses |
+| Escape | Finish the current round and submit it |
+| R | Retry a failed save with the same ID/payload, or refresh stats |
+| D | Explicitly discard an unconfirmed round's local retry |
+| Q | Quit; unsaved progress requires Y/N confirmation |
+
+Each round lasts up to 60 seconds of active game time, or ends when the invaders
+reach your ship. Each hit kills one enemy and earns 100 points. Clearing a wave
+creates a faster wave. Remaining projectiles count as misses at round end.
+Pauses, menus and network waits do not count as playtime; completed seconds are
+submitted. Long OS stalls automatically pause the simulation.
+
+On round completion, the game calls `POST /v1/runs`, then refreshes lifetime
+statistics, the top seven players, and the player's board rank. Network requests
+run sequentially in a background worker so they do not freeze the window.
+A failed save retains the immutable round in memory: **R** retries it unchanged.
+A failed stats refresh does not mark a confirmed save as unsaved.
+
+After saving, the results panel also compares the round with your previous rounds
+on the **same leaderboard**: accuracy, kills per round, and score per round.
+For example, 90% accuracy versus a historical 75% is **20% more accurate**
+(a relative change, not 20 percentage points). Historical accuracy is weighted
+by shots: total hits / total shots. Score and kills use arithmetic per-round
+averages. The current round and rounds with a later submission timestamp are
+excluded from the baseline, so retries do not count the round in its own average.
+Zero baselines and rounds without shots display explicit messages instead of
+division by zero; a first round has no previous average.
+
+The comparison also shows the **best score of another player on that board**,
+excluding all your scores, and how far this round is above/below it (or tied).
+This is the current leaderboard record when the summary is fetched; it can change
+on refresh. Opponents' private accuracy and kill statistics are never accessed.
+If the summary cannot be loaded, the round remains saved and **R** retries the
+read without posting the round again.
+
+This feature requires deploying the updated Java API with
+`GET /v1/runs/{id}/summary` before using it against Render. No database migration
+is needed. An older backend returns 404 for the comparison endpoint.
+
+Render Free may need time to wake up. Wait for the request to finish and press
+**R** if it times out. API errors are displayed in the window. An HTTP 404 can
+mean the selected board does not exist; 401 can require restarting and logging
+in again. Unsaved rounds are not persisted across restarts. Choosing to discard
+or quit cannot undo a request the server already accepted.
+
+The game uses the launcher's public Supabase/Render defaults and the `default`
+leaderboard. **Demo scores are real database writes** and share that board with
+manual submissions. Prefer a development account/project or configure a separate
+existing board:
+
+```sh
+GAME_API_URL=http://localhost:8080 ./examples/python/run_example.sh game
+./examples/python/run_example.sh game --leaderboard-id your-existing-demo-board
+```
+
+`GAME_LEADERBOARD_ID` can also select the board. The client cannot create boards.
+The game's scores are client-reported, not cheat-proof. Graphics use generated
+shapes only, with no external image, sound, or game assets.
+
+### Command-line client
+
 To run the example against our Render/Supabase deployment from macOS or Linux:
 
 ```sh
@@ -183,8 +263,9 @@ Use `http://localhost:8080` only for local development; deployed URLs must use H
 .venv/bin/python examples/python/game_client.py login
 ```
 
-The CLI asks for email and password without echoing the password, then displays
-your own statistics. It does not submit fabricated rounds.
+The login command asks for email and password without echoing the password,
+then displays your own statistics. It does not submit rounds; use `submit` or
+play the `game` demo to send results.
 
 To integrate with the game, import `GameClient` from this example module:
 
@@ -236,6 +317,7 @@ valid until expiry, so use appropriately short access-token lifetimes.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/v1/runs` | Save a completed round; 201 for new, 200 for an identical retry |
+| GET | `/v1/runs/{uuid}/summary` | Own saved round's prior same-board averages and best other player's score |
 | GET | `/v1/me/stats` | Your lifetime totals, best score, and accuracy |
 | GET | `/v1/me/profile` | Your display name and statistics-sharing setting |
 | PATCH | `/v1/me/profile` | Set both `displayName` and `shareStats` |
@@ -290,14 +372,26 @@ or seasons; the client cannot create boards or alter their metadata.
 Setting `accepting_runs = false` closes a board to new rounds but allows identical
 retries of already accepted rounds.
 
+Round summaries return `runId`, `leaderboardId`, `previous` (`roundsPlayed`,
+`averageScore`, `averageKills`, `accuracyPercent`) and `bestOtherPlayer` (the same
+public fields as a leaderboard entry). Averages are `null` with no previous
+rounds; accuracy is `null` with no previous shots. `bestOtherPlayer` is `null` when
+there are no opponents. Another player's round, even if they share stats, returns
+404; the token must belong to the round's owner.
+
 ## Run automated tests
 
 With Docker running:
 
 ```sh
 mvn test
+.venv/bin/python -m pip install -r examples/python/requirements-game.txt
 .venv/bin/python -m unittest discover -s examples/python -p 'test_*.py'
 ```
+
+The Python suite includes deterministic game rules, mocked API submission/retry
+tests, and window rendering using SDL's headless driver; it does not log in to
+Supabase or post scores.
 
 Java integration tests start a disposable real PostgreSQL container and a local
 JWKS endpoint. They use signed RSA/EC tokens, not bypassed authentication, and

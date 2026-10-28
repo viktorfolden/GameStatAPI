@@ -341,6 +341,78 @@ class GameApiIntegrationTest {
                 """, Long.class)).isEqualTo(3);
     }
 
+    @Test
+    void roundSummaryUsesPreviousRoundsOnSameBoardAndBestOtherPlayer() throws Exception {
+        UUID player = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        UUID currentId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO game.leaderboards (id, name, game_version, game_mode, difficulty, season)
+                VALUES ('hard', 'Hard', '1', 'standard', 'hard', 'all-time')
+                """);
+        submit(player, round(firstId, "default", 100, 8, 2, 8, 60)).andExpect(status().isCreated());
+        submit(player, round(secondId, "default", 300, 1, 1, 12, 60)).andExpect(status().isCreated());
+        submit(player, round(UUID.randomUUID(), "hard", 999, 100, 0, 100, 60))
+                .andExpect(status().isCreated());
+        submit(other, round(UUID.randomUUID(), "default", 250, 1, 0, 1, 60))
+                .andExpect(status().isCreated());
+        submit(other, round(UUID.randomUUID(), "hard", 9999, 1, 0, 1, 60))
+                .andExpect(status().isCreated());
+        var current = round(currentId, "default", 190, 9, 1, 9, 60);
+        submit(player, current).andExpect(status().isCreated());
+        jdbc.update("UPDATE game.runs SET submitted_at = '2025-01-01T00:00:00Z' WHERE id IN (?, ?)",
+                firstId, secondId);
+        jdbc.update("UPDATE game.runs SET submitted_at = '2025-02-01T00:00:00Z' WHERE id = ?", currentId);
+        submit(player, round(UUID.randomUUID(), "default", 1000, 100, 0, 100, 60))
+                .andExpect(status().isCreated());
+
+        String path = "/v1/runs/" + currentId + "/summary";
+        String summary = mvc.perform(get(path).header("Authorization", token(player)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.runId").value(currentId.toString()))
+                .andExpect(jsonPath("$.leaderboardId").value("default"))
+                .andExpect(jsonPath("$.previous.roundsPlayed").value(2))
+                .andExpect(jsonPath("$.previous.averageScore").value(200.0))
+                .andExpect(jsonPath("$.previous.averageKills").value(10.0))
+                .andExpect(jsonPath("$.previous.accuracyPercent").value(75.0))
+                .andExpect(jsonPath("$.bestOtherPlayer.playerId").value(other.toString()))
+                .andExpect(jsonPath("$.bestOtherPlayer.score").value(250))
+                .andExpect(jsonPath("$.bestOtherPlayer.hits").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        submit(player, current).andExpect(status().isOk());
+        mvc.perform(get(path).header("Authorization", token(player))).andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString()).isEqualTo(summary));
+        mvc.perform(get(path).header("Authorization", token(other))).andExpect(status().isNotFound());
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/v1/runs/" + UUID.randomUUID() + "/summary")
+                .header("Authorization", token(player))).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void roundSummaryHandlesFirstRoundNoShotsAndZeroBaselines() throws Exception {
+        UUID player = UUID.randomUUID();
+        UUID firstId = UUID.randomUUID();
+        submit(player, round(firstId, "default", 0, 0, 0, 0, 0)).andExpect(status().isCreated());
+        mvc.perform(get("/v1/runs/" + firstId + "/summary").header("Authorization", token(player)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previous.roundsPlayed").value(0))
+                .andExpect(jsonPath("$.previous.averageScore").value(nullValue()))
+                .andExpect(jsonPath("$.previous.averageKills").value(nullValue()))
+                .andExpect(jsonPath("$.previous.accuracyPercent").value(nullValue()))
+                .andExpect(jsonPath("$.bestOtherPlayer").value(nullValue()));
+        jdbc.update("UPDATE game.runs SET submitted_at = '2025-01-01T00:00:00Z' WHERE id = ?", firstId);
+        UUID nextId = UUID.randomUUID();
+        submit(player, round(nextId, "default", 0, 0, 1, 0, 1)).andExpect(status().isCreated());
+        mvc.perform(get("/v1/runs/" + nextId + "/summary").header("Authorization", token(player)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previous.roundsPlayed").value(1))
+                .andExpect(jsonPath("$.previous.averageScore").value(0.0))
+                .andExpect(jsonPath("$.previous.averageKills").value(0.0))
+                .andExpect(jsonPath("$.previous.accuracyPercent").value(nullValue()));
+    }
+
     private ResultActions submit(UUID player, Object round) throws Exception {
         return mvc.perform(post("/v1/runs").header("Authorization", token(player))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(round)));

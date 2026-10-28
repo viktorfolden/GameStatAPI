@@ -43,6 +43,11 @@ class GameController {
                 .body(submission.run());
     }
 
+    @GetMapping("/v1/runs/{id}/summary")
+    RoundSummary roundSummary(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return service.roundSummary(playerId(jwt), id);
+    }
+
     @GetMapping("/v1/me/profile")
     Profile myProfile(@AuthenticationPrincipal Jwt jwt) {
         return service.myProfile(playerId(jwt));

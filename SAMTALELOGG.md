@@ -658,3 +658,78 @@ og skriptet viser den lagrede runden og oppdatert statistikk.
 **Bruk ny `--run-id` for hver ny runde.** Ved timeout eller nettverksfeil,
 kjør nøyaktig samme kommando igjen; da telles ikke runden dobbelt.
 På Mac kan du generere en ny ID med `uuidgen`.
+
+## 23. Python-spill som demonstrerer API-et
+
+**Dato:** 2026-10-28 kl. 09:00:30
+
+### Bruker
+
+Under examples folderen: Generer et enkelt skytespill i python, som space invaders, som kan brukes til å demonstrere hvordan api fungerer.
+
+### Assistent (statusmeldinger, sammendrag)
+
+Laget et enkelt arkadespill med egen grafikk, innlogging og innsending av resultat
+etter hver runde. Gjenbrukte Python-klienten for statistikk og toppliste, med
+samme runde-ID ved retry. La til pause ved fokusbytte og dokumentasjon om at
+demorundene lagres som vanlige resultater.
+
+### Assistent – avsluttende svar
+
+Laget **Orbit Defenders**, et enkelt skytespill under `examples/python` med bevegelige fiender, flere bølger og 60-sekunders runder.
+
+Start fra prosjektmappen:
+
+```sh
+./examples/python/run_example.sh game
+```
+
+Velg **L** for innlogging eller **S** for å opprette konto i terminalen. Etter innlogging åpnes spillvinduet.
+
+| Tast | Handling |
+|---|---|
+| Enter | Start en runde |
+| Piltaster / A og D | Flytt skipet |
+| Mellomrom | Skyt |
+| P | Pause |
+| Escape | Avslutt runden og send resultatet |
+| R | Prøv innsending igjen / oppdater statistikk |
+| Q | Avslutt spillet |
+
+Spillet sender **poeng, treff, bomskudd, drepte fiender og aktiv spilletid** til API-et. Totalstatistikk, toppliste og egen plassering vises i sidepanelet. Ved nettverksfeil beholdes runden for ny innsending med samme ID.
+
+**Merk:** Spillet bruker Render-adressen og lagrer ekte resultater på `default`-topplisten. Detaljer om eget testmiljø og annen toppliste står i [README.md](README.md).
+
+## 24. End-of-round statistical comparisons
+
+**Dato:** 2026-10-28 kl. 09:23:36
+
+### Bruker
+
+After each round give the user a statistic summary, like you were 20% more accurate than you average, but had 10% fewer kills and 5% less total points. And also compare to the best of other users.
+
+### Assistent – clarification
+
+Asked whether other-player comparisons should use public leaderboard scores only,
+or also accuracy and kills from players who share their statistics. Explained
+that personal comparisons would use previous rounds on the same board, excluding
+the just-finished round.
+
+### Bruker – selected option
+
+Compare against other players' best score only (Recommended; keeps private statistics private)
+
+### Assistent – final response
+
+Implemented an expanded **end-of-round summary** showing:
+
+- Accuracy, kills and points compared with your previous averages on the same leaderboard.
+- The best score from another player, excluding your own scores, and how far above or below it you finished.
+
+For example: **20% more accurate, 10% fewer kills, 5% fewer points**. The completed round is excluded from its own baseline. First rounds, zero averages and missing opponents get clear messages instead of misleading percentages.
+
+**Deploy the updated Java API to Render before using this feature.** It adds `GET /v1/runs/{id}/summary`; no database migration is needed. Then launch the game as usual:
+
+```sh
+./examples/python/run_example.sh game
+```

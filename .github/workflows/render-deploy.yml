@@ -32,10 +32,12 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: examples/python/requirements.txt
+          cache-dependency-path: |
+            examples/python/requirements.txt
+            examples/python/requirements-game.txt
       - name: Install Python client dependencies
-        run: python -m pip install -r examples/python/requirements.txt
-      - name: Run Python client tests
+        run: python -m pip install -r examples/python/requirements-game.txt
+      - name: Run Python client and game tests
         run: python -m unittest discover -s examples/python -p 'test_*.py'
       - name: Build deployment image
         run: docker build --tag game-stat-api:ci .

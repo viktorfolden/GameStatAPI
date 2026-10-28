@@ -9,16 +9,17 @@ if [[ $# -eq 0 ]]; then
   set -- login
 fi
 case "$1" in
-  login|signup|submit) ;;
+  login|signup|submit|game) ;;
   -h|--help)
-    echo "Usage: $0 [login|signup|submit] [options] (default: login)"
+    echo "Usage: $0 [login|signup|submit|game] [options] (default: login)"
+    echo "Game: opens Orbit Defenders after interactive login/signup."
     echo "Submit options: --run-id UUID --score N --hits N --misses N --enemies-killed N --play-time-seconds N"
     echo "Creates .venv if needed and installs the example's dependencies."
     echo "Override SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, or GAME_API_URL via environment variables."
     exit 0
     ;;
   *)
-    echo "Usage: $0 [login|signup|submit] [options]" >&2
+    echo "Usage: $0 [login|signup|submit|game] [options]" >&2
     exit 2
     ;;
 esac
@@ -29,5 +30,11 @@ export GAME_API_URL="${GAME_API_URL:-https://viktor-game-api.onrender.com}"
 if [[ ! -x "$PYTHON" ]]; then
   python3 -m venv "$PROJECT_DIR/.venv"
 fi
-"$PYTHON" -m pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
-exec "$PYTHON" "$SCRIPT_DIR/game_client.py" "$@"
+if [[ "$1" == game ]]; then
+  shift
+  "$PYTHON" -m pip install --quiet -r "$SCRIPT_DIR/requirements-game.txt"
+  exec "$PYTHON" "$SCRIPT_DIR/space_demo.py" "$@"
+else
+  "$PYTHON" -m pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
+  exec "$PYTHON" "$SCRIPT_DIR/game_client.py" "$@"
+fi

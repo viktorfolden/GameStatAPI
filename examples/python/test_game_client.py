@@ -90,6 +90,14 @@ class GameClientTest(unittest.TestCase):
         self.client.my_standing()
         self.assertTrue(self.http.request.call_args.args[1].endswith("/v1/leaderboards/default/me"))
 
+    def test_round_summary_uses_authenticated_round_endpoint(self):
+        run_id = uuid4()
+        self.http.request.return_value = response(200, {"runId": str(run_id)})
+        self.assertEqual(self.client.round_summary(run_id), {"runId": str(run_id)})
+        self.assertEqual(self.http.request.call_args.args,
+                         ("GET", f"http://localhost:8080/v1/runs/{run_id}/summary"))
+        self.assertIn("Authorization", self.http.request.call_args.kwargs["headers"])
+
     def test_rejects_insecure_remote_urls(self):
         for url in [
             "http://api.example.com",
