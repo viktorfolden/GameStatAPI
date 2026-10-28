@@ -15,7 +15,7 @@ import pygame
 import requests
 from supabase_auth.errors import AuthError
 
-from game_client import GameClient, LoginRequiredError
+from game_client import GameClient, LoginRequiredError, recover_password_interactively
 from round_summary import summary_lines
 from space_round import (
     ENEMY_HEIGHT, ENEMY_WIDTH, HEIGHT, PLAYER_Y, ROUND_SECONDS, WIDTH,
@@ -338,10 +338,13 @@ def main():
         os.environ["GAME_API_URL"],
     )
     print("Orbit Defenders - sign in to play. No database credentials are needed.")
-    action = input("[L]ogin or [S]ign up? ").strip().lower()
-    if action not in {"l", "login", "s", "signup"}:
-        parser.error("Choose L for login or S to create an account")
+    action = input("[L]ogin, [S]ign up or [F]orgot password? ").strip().lower()
+    if action not in {"l", "login", "s", "signup", "f", "forgot"}:
+        parser.error("Choose L for login, S to create an account or F to reset your password")
     email = input("Email: ").strip()
+    if action in {"f", "forgot"}:
+        recover_password_interactively(client, email)
+        return
     password = getpass("Password: ")
     try:
         if action in {"s", "signup"}:

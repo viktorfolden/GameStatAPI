@@ -191,6 +191,22 @@ class DemoWindowTest(unittest.TestCase):
 
 
 class DemoLoginTest(unittest.TestCase):
+    def test_forgot_password_uses_shared_recovery_without_launching_game(self):
+        with patch("sys.argv", ["space_demo.py"]), patch.dict(os.environ, {
+            "SUPABASE_URL": "https://example.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": "public-key",
+            "GAME_API_URL": "http://localhost:8080",
+        }), patch("space_demo.GameClient") as factory, \
+                patch("builtins.input", side_effect=["f", "pilot@example.com"]), \
+                patch("space_demo.getpass") as old_password, \
+                patch("space_demo.recover_password_interactively") as recover, \
+                patch("builtins.print"), patch("space_demo.SpaceDemo") as window:
+            main()
+            recover.assert_called_once_with(factory.return_value, "pilot@example.com")
+            old_password.assert_not_called()
+            factory.return_value.sign_in.assert_not_called()
+            window.assert_not_called()
+
     def test_signup_returns_to_terminal_for_email_confirmation(self):
         with patch("sys.argv", ["space_demo.py"]), patch.dict(os.environ, {
             "SUPABASE_URL": "https://example.supabase.co",

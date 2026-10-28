@@ -4,11 +4,14 @@ import argparse
 from getpass import getpass
 import json
 import os
+import sys
 from urllib.parse import urlparse
 from uuid import UUID
 
 import requests
+import httpx
 from supabase import ClientOptions, create_client
+from supabase_auth.errors import AuthError
 
 
 class LoginRequiredError(Exception):
@@ -57,6 +60,23 @@ class GameClient:
 
     def sign_out(self) -> None:
         self._supabase.auth.sign_out({"scope": "local"})
+
+    def request_password_reset(self, email: str) -> None:
+        self._supabase.auth.reset_password_email(email)
+
+    def reset_password(self, email: str, code: str, new_password: str) -> None:
+        if not email.strip() or not code.strip() or not new_password:
+            raise ValueError("Email, recovery code and new password are required")
+        response = self._supabase.auth.verify_otp({
+            "email": email.strip(),
+            "token": code.strip(),
+            "type": "recovery",
+        })
+        if response.session is None:
+            raise LoginRequiredError("Recovery verification did not create a session")
+        updated = self._supabase.auth.update_user({"password": new_password})
+        if updated.user is None:
+            raise LoginRequiredError("Supabase did not confirm the password update")
 
     def _request(self, method: str, path: str, *, payload=None, params=None):
         # get_session refreshes an expired session even with background refresh disabled.
@@ -144,11 +164,50 @@ class GameClient:
         return self._request("GET", f"/v1/leaderboards/{leaderboard_id}/me")
 
 
+def recover_password_interactively(client: GameClient, email: str, *, send_email: bool = True) -> None:
+    try:
+        if not email:
+            raise ValueError("Enter the email address of your game account")
+        if send_email:
+            client.request_password_reset(email)
+            print("If this address has an eligible account, a recovery email will arrive shortly.")
+            print("Use its code here. If you only see a link, the administrator must update the reset email template.")
+        code = getpass("Recovery code (hidden): ").strip()
+        if not code:
+            raise ValueError("Recovery cancelled: no code entered")
+        while True:
+            password = getpass("New password: ")
+            confirmation = getpass("Confirm new password: ")
+            if password and password == confirmation:
+                del confirmation
+                break
+            print("Passwords must be nonempty and match. Please try again.")
+            del password, confirmation
+        try:
+            client.reset_password(email, code, password)
+        finally:
+            del password, code
+    except (AuthError, httpx.HTTPError, requests.RequestException, LoginRequiredError, ValueError) as error:
+        print(f"Password reset failed: {error}", file=sys.stderr)
+        print("Check the code and password requirements. If the code was used or expired, request a new one.",
+              file=sys.stderr)
+        raise SystemExit(1) from error
+    print("Password updated. Log in again using your new password.")
+    try:
+        client.sign_out()
+    except (AuthError, httpx.HTTPError, requests.RequestException) as error:
+        print(f"Password was updated, but logout could not be confirmed: {type(error).__name__}",
+              file=sys.stderr)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create an account, show statistics, or submit a round")
     actions = parser.add_subparsers(dest="action", required=True)
     actions.add_parser("signup")
     actions.add_parser("login")
+    recovery = actions.add_parser("reset-password", help="Recover your account with an emailed code")
+    recovery.add_argument("--use-existing-code", action="store_true",
+                          help="Use a recovery code already emailed to you instead of requesting another")
     submit = actions.add_parser("submit", help="Sign in and submit one round")
     submit.add_argument("--run-id", type=UUID, required=True,
                         help="Unique round UUID; reuse with the same data when retrying")
@@ -168,6 +227,9 @@ def main() -> None:
         os.environ["GAME_API_URL"],
     )
     email = input("Email: ").strip()
+    if args.action == "reset-password":
+        recover_password_interactively(client, email, send_email=not args.use_existing_code)
+        return
     password = getpass("Password: ")
     if args.action == "signup":
         client.sign_up(email, password)

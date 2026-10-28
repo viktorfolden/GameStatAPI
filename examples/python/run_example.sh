@@ -9,9 +9,10 @@ if [[ $# -eq 0 ]]; then
   set -- login
 fi
 case "$1" in
-  login|signup|submit|game) ;;
+  login|signup|submit|game|reset-password) ;;
   -h|--help)
-    echo "Usage: $0 [login|signup|submit|game] [options] (default: login)"
+    echo "Usage: $0 [login|signup|submit|game|reset-password] [options] (default: login)"
+    echo "Reset password: requests an email code; --use-existing-code skips sending another."
     echo "Game: opens Orbit Defenders after interactive login/signup."
     echo "Submit options: --run-id UUID --score N --hits N --misses N --enemies-killed N --play-time-seconds N"
     echo "Creates .venv if needed and installs the example's dependencies."
@@ -19,7 +20,7 @@ case "$1" in
     exit 0
     ;;
   *)
-    echo "Usage: $0 [login|signup|submit|game] [options]" >&2
+    echo "Usage: $0 [login|signup|submit|game|reset-password] [options]" >&2
     exit 2
     ;;
 esac

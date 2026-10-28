@@ -733,3 +733,41 @@ For example: **20% more accurate, 10% fewer kills, 5% fewer points**. The comple
 ```sh
 ./examples/python/run_example.sh game
 ```
+
+## 25. Forgotten-password recovery
+
+**Dato:** 2026-10-28 kl. 09:34:22
+
+### Bruker
+
+Also add a possibility to make a new password for users that dont remember it
+
+### Assistent – clarification
+
+Asked whether recovery should use an emailed code entered in the Python launcher,
+or a reset link opening a hosted web page. Both require Supabase email verification.
+
+### Bruker – selected option
+
+Email a recovery code and enter it in the Python launcher (Recommended for this demo; requires a Supabase email-template change)
+
+### Assistent – status
+
+I’ll add a `reset-password` command and a “Forgot password” option in the game launcher.
+Supabase will verify the emailed recovery code before accepting a new password.
+The recovery email template must be updated in Supabase; template and instructions
+are included in the project.
+
+### Assistent – final response
+
+Added **Forgot password** recovery. Players can choose **F** in the game's login menu or run:
+
+```sh
+./examples/python/run_example.sh reset-password
+```
+
+They enter their email, the recovery code sent by Supabase, and a new password twice. Existing scores and the player account are preserved.
+
+**One setup step is required in Supabase:** open **Authentication → Email Templates → Reset password**, and paste the contents of [reset-password-email.html](examples/python/reset-password-email.html). It includes `{{ .Token }}` so the email contains the recovery code rather than only a link.
+
+No Java redeployment is needed. Full setup and troubleshooting instructions are in [README.md](README.md).

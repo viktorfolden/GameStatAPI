@@ -135,7 +135,7 @@ Start it from a terminal (IntelliJ's Terminal tab also works):
 ```
 
 The launcher installs `pygame-ce` in the existing virtual environment. Choose
-**L** to log in or **S** to sign up using email/password in the terminal.
+**L** to log in, **S** to sign up, or **F** for a forgotten password in the terminal.
 After signup, confirm your email and run the command again with **L**.
 After login, a game window opens. No database credentials are used by the game.
 
@@ -307,10 +307,61 @@ on HTTP 401; other failures propagate to the caller. The example does not persis
 unsent rounds or integrate with a particular game's event loop.
 
 If adding "remember me", store the refresh token in the OS credential store (for
-example `keyring`), never a plaintext file. Password recovery requires an appropriate
-Supabase recovery redirect/UI and is not included in this minimal game client.
+example `keyring`), never a plaintext file. Password recovery uses the email-code
+flow described below; it does not require a hosted reset page.
 Logout revokes this session's refresh token; already-issued access tokens can remain
 valid until expiry, so use appropriately short access-token lifetimes.
+
+### Forgotten password: email recovery code
+
+This resets a **player's Supabase Auth password**, not the database password or
+the local encryption master passphrase. The Java server never handles passwords.
+
+**Required one-time Supabase configuration:**
+
+1. Open your project's **Authentication > Email Templates > Reset password**
+   (under the email settings in some dashboard layouts).
+2. Replace the reset email body with the contents of
+   [`examples/python/reset-password-email.html`](examples/python/reset-password-email.html).
+   The essential template variable is **`{{ .Token }}`**, which renders the recovery
+   code. Do not substitute `{{ .TokenHash }}`. The standard link-only template
+   does not expose the code needed by this launcher.
+3. Save the template. Configure custom SMTP for delivery to real players and
+   suitable Auth password requirements, OTP expiry and rate limits. Supabase's
+   default mail service has recipient/rate restrictions.
+
+Players can choose **F** at the game's login prompt, or run:
+
+```sh
+./examples/python/run_example.sh reset-password
+```
+
+Enter the account's email, the code from the recovery email, then a new password
+twice. The code and passwords use hidden prompts. No old password is required.
+Supabase verifies the code with `type: recovery` before the client updates the
+password through the resulting session. The client then signs out of that local
+session and asks the player to log in again. Account ID and existing scores are
+preserved. No Java redeployment or database migration is needed for this feature.
+
+If you exited before using the emailed code, resume without sending another:
+
+```sh
+./examples/python/run_example.sh reset-password --use-existing-code
+```
+
+The request confirmation deliberately does not reveal whether the address exists.
+Delivery failures and rate limits are shown as errors; the client never claims
+that a password was changed if verification/update fails. Codes are expiring and
+single-use. If verification consumed a code but the password update failed
+(for example a password-policy rejection), request a new code and try again.
+After a network failure during update, it is possible the password was changed;
+try logging in with the new password before repeating recovery.
+
+No code, password, or recovery session is persisted by the example. Do not share
+codes or tokens. Password changes should not be treated as instant revocation of
+already-issued access tokens: the Java API accepts valid tokens until expiry.
+If MFA or CAPTCHA is enabled, additional UI for those challenges is required;
+the minimal demo surfaces the provider's rejection rather than bypassing it.
 
 ## API
 
